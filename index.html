@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>邮件汇总看板</title>
+<style>
+  :root {
+    --bg: #f3f5fa;
+    --card: #ffffff;
+    --text: #1a2433;
+    --muted: #6b7788;
+    --line: #e6eaf2;
+    --accent: #2f6bff;
+    --accent-soft: #eaf0ff;
+    --ok: #16875c;
+    --ok-soft: #e5f6ee;
+    --warn: #a86612;
+    --warn-soft: #fdf1dc;
+    --danger: #c23b3b;
+    --danger-soft: #fdecec;
+    --shadow: 0 6px 24px rgba(23, 43, 77, 0.06);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+      "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .app { max-width: 1280px; margin: 0 auto; padding: 28px 24px 40px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .logo {
+    width: 46px; height: 46px; border-radius: 13px;
+    background: linear-gradient(135deg, #2f6bff, #6c93ff);
+    color: #fff; font-weight: 700; font-size: 13px; letter-spacing: 1px;
+    display: grid; place-items: center; box-shadow: 0 6px 16px rgba(47, 107, 255, 0.28);
+  }
+  h1 { margin: 0; font-size: 22px; letter-spacing: 0.2px; }
+  .sub { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+  .head-right { display: flex; align-items: center; gap: 12px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 600;
+    background: var(--accent-soft); color: var(--accent);
+  }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .pill.ok { background: var(--ok-soft); color: var(--ok); }
+  .pill.sample { background: var(--warn-soft); color: var(--warn); }
+  .pill.bad { background: var(--danger-soft); color: var(--danger); }
+  button {
+    font: inherit; cursor: pointer; border: 1px solid var(--line);
+    background: var(--card); color: var(--text);
+    padding: 9px 15px; border-radius: 10px;
+  }
+  button:hover { border-color: #cfd8e8; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .meta { margin-top: 8px; color: var(--muted); font-size: 12.5px; }
+
+  .banner {
+    display: flex; gap: 10px; align-items: flex-start;
+    margin-top: 18px; padding: 13px 16px; border-radius: 12px;
+    background: var(--warn-soft); color: #7a4b06; border: 1px solid #f2dfb8;
+    font-size: 13.5px; line-height: 1.6;
+  }
+  .banner.bad { background: var(--danger-soft); color: #8f2626; border-color: #f3cccc; }
+  .banner.hidden { display: none; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 20px; }
+  .stat {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 16px 18px; box-shadow: var(--shadow);
+  }
+  .stat .label { color: var(--muted); font-size: 12.5px; }
+  .stat .value { margin-top: 8px; font-size: 28px; font-weight: 700; line-height: 1.1; }
+  .stat .hint { margin-top: 5px; color: var(--muted); font-size: 12px; }
+  .stat .value.danger { color: var(--danger); }
+  .stat .value.accent { color: var(--accent); }
+
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 18px; margin-top: 20px; align-items: start; }
+  .panel {
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: var(--shadow); overflow: hidden;
+  }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; padding: 16px 18px; border-bottom: 1px solid var(--line);
+  }
+  .panel-head h2 { margin: 0; font-size: 15.5px; }
+  .count { color: var(--accent); font-weight: 700; margin-left: 4px; }
+  .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  input[type="search"], select {
+    font: inherit; font-size: 13px; padding: 8px 11px;
+    border: 1px solid var(--line); border-radius: 9px; background: #fbfcfe; color: var(--text);
+  }
+  input[type="search"] { width: 200px; }
+  input[type="search"]:focus, select:focus { outline: 2px solid var(--accent-soft); border-color: #b9caff; }
+  .check { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .check input { accent-color: var(--accent); }
+
+  .mail-list { max-height: 620px; overflow: auto; }
+  .mail {
+    display: flex; gap: 12px; width: 100%; text-align: left;
+    padding: 14px 18px; border: 0; border-bottom: 1px solid var(--line);
+    background: transparent; border-radius: 0;
+  }
+  .mail:hover { background: #f8faff; }
+  .mail .avatar {
+    flex: none; width: 36px; height: 36px; border-radius: 50%;
+    background: var(--accent-soft); color: var(--accent);
+    display: grid; place-items: center; font-weight: 700; font-size: 14px;
+  }
+  .mail-main { min-width: 0; flex: 1; }
+  .line1 { display: flex; align-items: center; gap: 8px; }
+  .sender { font-weight: 650; font-size: 13.5px; }
+  .tag {
+    font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+    background: var(--danger-soft); color: var(--danger);
+  }
+  .tag.attach { background: var(--accent-soft); color: var(--accent); }
+  .time { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .subject { margin-top: 4px; font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .summary {
+    margin-top: 4px; color: var(--muted); font-size: 12.5px; line-height: 1.55;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .mail.open .summary { display: block; -webkit-line-clamp: unset; }
+  .detail { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); color: var(--muted); font-size: 12px; }
+  .mail.open .detail { display: block; }
+
+  .empty { padding: 52px 20px; text-align: center; color: var(--muted); font-size: 13.5px; line-height: 1.8; }
+  .empty strong { display: block; color: var(--text); font-size: 15px; margin-bottom: 6px; }
+
+  .digest-panel { position: sticky; top: 20px; }
+  .digest-body { padding: 16px 18px 18px; }
+  .digest-date { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .digest-date h3 { margin: 0; font-size: 15px; }
+  .digest-date span { color: var(--muted); font-size: 12px; }
+  .digest-summary { margin: 10px 0 0; font-size: 13px; line-height: 1.7; color: #33415c; }
+  .digest-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 14px; }
+  .digest-stat { background: #f8faff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; }
+  .digest-stat .k { color: var(--muted); font-size: 11.5px; }
+  .digest-stat .v { font-size: 17px; font-weight: 700; margin-top: 2px; }
+  .section-title { margin: 16px 0 8px; font-size: 12.5px; color: var(--muted); letter-spacing: 0.4px; }
+  .sender-bars { display: grid; gap: 7px; }
+  .bar-row { display: grid; grid-template-columns: 78px 1fr 30px; align-items: center; gap: 8px; font-size: 12.5px; }
+  .bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar { height: 7px; border-radius: 999px; background: #eef2fb; overflow: hidden; }
+  .bar > i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #2f6bff, #7aa0ff); }
+  .bar-count { text-align: right; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    padding: 5px 9px; border-radius: 8px; background: var(--accent-soft);
+    color: #2a4fb5; font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .actions { display: grid; gap: 7px; }
+  .action {
+    padding: 9px 11px; border-radius: 10px; background: #fff7ed; border: 1px solid #f6e0bd;
+    font-size: 12.5px; line-height: 1.5;
+  }
+  .action .who { color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .history { border-top: 1px solid var(--line); padding: 10px 12px 4px; max-height: 220px; overflow: auto; }
+  .history-title { margin: 16px 18px 8px; font-size: 12.5px; color: var(--muted); }
+  .history-item {
+    width: 100%; display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 10px; border: 0; background: transparent; border-radius: 9px; font-size: 12.5px; color: var(--text);
+  }
+  .history-item:hover { background: #f6f8fd; }
+  .history-item.active { background: var(--accent-soft); color: #24439c; font-weight: 600; }
+  .history-item .hint { color: var(--muted); font-size: 11.5px; }
+
+  footer { margin-top: 22px; color: var(--muted); font-size: 12px; line-height: 1.8; }
+  footer code { background: #eceff7; padding: 1px 5px; border-radius: 5px; color: #37456b; }
+
+  @media (max-width: 980px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .grid { grid-template-columns: 1fr; }
+    .digest-panel { position: static; }
+    input[type="search"] { width: 150px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <div class="logo">MAIL</div>
+      <div>
+        <h1>邮件汇总看板</h1>
+        <p class="sub">未读邮件一览 · 每日 15:00 自动汇总</p>
+      </div>
+    </div>
+    <div class="head-right">
+      <span id="statusPill" class="pill">加载中</span>
+      <button id="refreshBtn" class="primary">刷新页面</button>
+    </div>
+  </header>
+  <div class="meta" id="metaLine"></div>
+
+  <div id="banner" class="banner hidden"></div>
+
+  <section class="stats" id="stats"></section>
+
+  <main class="grid">
+    <section class="panel list-panel">
+      <div class="panel-head">
+        <h2>未读邮件<span class="count" id="unreadCount"></span></h2>
+        <div class="tools">
+          <input type="search" id="search" placeholder="搜索主题 / 发件人 / 摘要">
+          <select id="senderFilter"><option value="">全部发件人</option></select>
+          <label class="check"><input type="checkbox" id="onlyImportant"> 只看重要</label>
+        </div>
+      </div>
+      <div class="mail-list" id="mailList"></div>
+    </section>
+
+    <aside class="panel digest-panel">
+      <div class="panel-head"><h2>每日汇总</h2></div>
+      <div class="digest-body" id="digestBody"></div>
+      <h3 class="history-title">历史汇总</h3>
+      <div class="history" id="digestHistory"></div>
+    </aside>
+  </main>
+
+  <footer>
+    数据由 <code>fetch_unread.py</code> 拉取并通过 <code>dashboard/data.js</code> 提供给页面。
+    自动任务在工作日 9:00–19:00 每小时刷新未读，每天 15:00 生成当日汇总。
+  </footer>
+</div>
+
+<script src="./data.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var DATA = window.__MAIL_DATA__ || null;
+  var state = { query: "", sender: "", onlyImportant: false, openId: null, digestIndex: 0 };
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function esc(value) {
+    return String(value == null ? "" : value)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function formatDateTime(isoText) {
+    if (!isoText) return "未知时间";
+    var d = new Date(isoText);
+    if (isNaN(d.getTime())) return isoText;
+    var pad = function (n) { return n < 10 ? "0" + n : String(n); };
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+      " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  }
+
+  function relativeTime(isoText) {
+    if (!isoText) return "";
+    var d = new Date(isoText);
+    if (isNaN(d.getTime())) return "";
+    var diff = Math.floor((Date.now() - d.getTime()) / 60000);
+    if (diff < 1) return "刚刚";
+    if (diff < 60) return diff + " 分钟前";
+    if (diff < 1440) return Math.floor(diff / 60) + " 小时前";
+    if (diff < 43200) return Math.floor(diff / 1440) + " 天前";
+    return formatDateTime(isoText).slice(0, 10);
+  }
+
+  function pillClass(status) {
+    if (status === "ok") return "pill ok";
+    if (status === "sample") return "pill sample";
+    return "pill bad";
+  }
+
+  function statusText(status) {
+    if (status === "ok") return "数据正常";
+    if (status === "sample") return "示例数据";
+    if (status === "unavailable") return "取数失败";
+    return "未知状态";
+  }
+
+  function renderHeader() {
+    if (!DATA) {
+      $("statusPill").className = "pill bad";
+      $("statusPill").textContent = "缺少数据";
+      $("metaLine").textContent = "未找到 dashboard/data.js，请先运行 python3 fetch_unread.py";
+      return;
+    }
+
+    $("statusPill").className = pillClass(DATA.status);
+    $("statusPill").textContent = statusText(DATA.status);
+
+    var parts = [];
+    if (DATA.generatedAt) parts.push("更新于 " + formatDateTime(DATA.generatedAt));
+    if (DATA.lastSuccessAt && DATA.status !== "ok") {
+      parts.push("上次成功取数 " + formatDateTime(DATA.lastSuccessAt));
+    }
+    if (DATA.dataSource && DATA.dataSource !== "sample") {
+      parts.push("数据源：企业邮箱");
+    }
+    $("metaLine").textContent = parts.join("  ·  ");
+
+    var banner = $("banner");
+    if (DATA.status !== "ok" && DATA.statusMessage) {
+      banner.className = "banner" + (DATA.status === "unavailable" ? " bad" : "");
+      banner.textContent = DATA.statusMessage;
+    } else {
+      banner.className = "banner hidden";
+    }
+  }
+
+  function renderStats() {
+    var stats = (DATA && DATA.stats) || {};
+    var cards = [
+      { label: "未读总数", value: stats.totalUnread || 0, hint: stats.shown && stats.shown < stats.totalUnread ? "列表展示前 " + stats.shown + " 封" : "收件箱未读" },
+      { label: "24 小时新增", value: stats.newLast24h || 0, hint: "最近一天收到的未读", accent: true },
+      { label: "涉及发件人", value: stats.senders || 0, hint: "去重后的发件人数" },
+      { label: "需要关注", value: stats.important || 0, hint: "含紧急 / 审批 / 截止等关键词", danger: true }
+    ];
+    $("stats").innerHTML = cards.map(function (c) {
+      var cls = "value" + (c.accent ? " accent" : "") + (c.danger && c.value ? " danger" : "");
+      return '<div class="stat"><div class="label">' + esc(c.label) + '</div>' +
+        '<div class="' + cls + '">' + esc(c.value) + '</div>' +
+        '<div class="hint">' + esc(c.hint) + '</div></div>';
+    }).join("");
+  }
+
+  function visibleMails() {
+    var list = (DATA && DATA.unread) || [];
+    var q = state.query.trim().toLowerCase();
+    return list.filter(function (mail) {
+      if (state.sender && (mail.sender || "") !== state.sender) return false;
+      if (state.onlyImportant && !mail.important) return false;
+      if (!q) return true;
+      var haystack = ((mail.subject || "") + " " + (mail.sender || "") + " " + (mail.summary || "")).toLowerCase();
+      return haystack.indexOf(q) !== -1;
+    });
+  }
+
+  function renderSenderFilter() {
+    var list = (DATA && DATA.unread) || [];
+    var counts = {};
+    list.forEach(function (mail) {
+      var name = mail.sender || "未知发件人";
+      counts[name] = (counts[name] || 0) + 1;
+    });
+    var names = Object.keys(counts).sort(function (a, b) {
+      return counts[b] - counts[a] || a.localeCompare(b, "zh-CN");
+    });
+    var select = $("senderFilter");
+    select.innerHTML = '<option value="">全部发件人</option>' + names.map(function (name) {
+      return '<option value="' + esc(name) + '">' + esc(name) + "（" + counts[name] + "）</option>";
+    }).join("");
+  }
+
+  function renderMails() {
+    var list = visibleMails();
+    var total = (DATA && DATA.unread) ? DATA.unread.length : 0;
+    $("unreadCount").textContent = total ? String(total) : "";
+
+    if (!DATA || !DATA.unread || !DATA.unread.length) {
+      $("mailList").innerHTML =
+        '<div class="empty"><strong>还没有未读邮件数据</strong>' +
+        "运行 <code>python3 fetch_unread.py</code> 拉取邮件后，这里会显示未读列表。<br>" +
+        "如果脚本提示缺少 aigate-cli 或鉴权失败，请先补齐依赖或配置 ugate token。</div>";
+      return;
+    }
+
+    if (!list.length) {
+      $("mailList").innerHTML = '<div class="empty"><strong>没有匹配的邮件</strong>换个关键词或筛选条件试试。</div>';
+      return;
+    }
+
+    $("mailList").innerHTML = list.map(function (mail) {
+      var open = state.openId === mail.id ? " open" : "";
+      var initial = (mail.sender || "?").slice(0, 1);
+      var tags = "";
+      if (mail.important) tags += '<span class="tag">重要</span>';
+      if (mail.hasAttachments) tags += '<span class="tag attach">附件</span>';
+      var summary = mail.summary || "（无摘要）";
+      var detail = "发件人：" + esc(mail.senderAddress || mail.sender || "未知") +
+        " · 收到时间：" + esc(formatDateTime(mail.receivedAt));
+      return '<button class="mail' + open + '" data-id="' + esc(mail.id) + '">' +
+        '<div class="avatar">' + esc(initial) + "</div>" +
+        '<div class="mail-main">' +
+          '<div class="line1"><span class="sender">' + esc(mail.sender || "未知发件人") + "</span>" +
+            tags + '<span class="time">' + esc(relativeTime(mail.receivedAt)) + "</span></div>" +
+          '<div class="subject">' + esc(mail.subject) + "</div>" +
+          '<div class="summary">' + esc(summary) + "</div>" +
+          '<div class="detail">' + detail + "</div>" +
+        "</div></button>";
+    }).join("");
+  }
+
+  function renderDigest(index) {
+    var digests = (DATA && DATA.digests) || [];
+    var digest = index != null && digests[index] ? digests[index] : (DATA && DATA.digest);
+    var body = $("digestBody");
+
+    if (!digest) {
+      body.innerHTML = '<div class="empty"><strong>还没有生成汇总</strong>' +
+        "每天 15:00 的定时任务会在这里生成当日未读汇总，<br>也可以运行 <code>python3 fetch_unread.py --digest</code> 立即生成。</div>";
+      $("digestHistory").innerHTML = "";
+      return;
+    }
+
+    var bars = (digest.topSenders || []).map(function (item) {
+      var max = Math.max.apply(null, (digest.topSenders || []).map(function (x) { return x.count; }).concat([1]));
+      var width = Math.max(6, Math.round((item.count / max) * 100));
+      return '<div class="bar-row"><span class="bar-name">' + esc(item.name) + "</span>" +
+        '<span class="bar"><i style="width:' + width + '%"></i></span>' +
+        '<span class="bar-count">' + esc(item.count) + "</span></div>";
+    }).join("");
+    var chips = (digest.highlights || []).map(function (text) {
+      return '<span class="chip" title="' + esc(text) + '">' + esc(text) + "</span>";
+    }).join("");
+    var actions = (digest.actionItems || []).map(function (item) {
+      return '<div class="action">' + esc(item.subject) +
+        '<div class="who">' + esc(item.sender) + " · " + esc(item.receivedText) + "</div></div>";
+    }).join("");
+
+    body.innerHTML =
+      '<div class="digest-date"><h3>' + esc(digest.date || "当日汇总") + "</h3>" +
+        "<span>" + esc(relativeTime(digest.generatedAt)) + "生成</span></div>" +
+      '<p class="digest-summary">' + esc(digest.summaryText || "暂无汇总内容。") + "</p>" +
+      '<div class="digest-stats">' +
+        '<div class="digest-stat"><div class="k">未读总数</div><div class="v">' + esc(digest.totalUnread || 0) + "</div></div>" +
+        '<div class="digest-stat"><div class="k">24 小时新增</div><div class="v">' + esc(digest.newLast24h || 0) + "</div></div>" +
+        '<div class="digest-stat"><div class="k">发件人数</div><div class="v">' + esc(digest.senders || 0) + "</div></div>" +
+        '<div class="digest-stat"><div class="k">需要关注</div><div class="v">' + esc(digest.important || 0) + "</div></div>" +
+      "</div>" +
+      (bars ? '<div class="section-title">发件人分布</div><div class="sender-bars">' + bars + "</div>" : "") +
+      (actions ? '<div class="section-title">待处理事项</div><div class="actions">' + actions + "</div>" : "") +
+      (chips ? '<div class="section-title">优先关注</div><div class="chips">' + chips + "</div>" : "");
+
+    $("digestHistory").innerHTML = digests.map(function (item, i) {
+      var active = index === i ? " active" : "";
+      return '<button class="history-item' + active + '" data-index="' + i + '">' +
+        "<span>" + esc(item.date) + "</span>" +
+        '<span class="hint">未读 ' + esc(item.totalUnread || 0) + " · 新增 " + esc(item.newLast24h || 0) + "</span></button>";
+    }).join("");
+  }
+
+  function bindEvents() {
+    $("refreshBtn").addEventListener("click", function () {
+      var url = location.pathname + "?t=" + Date.now();
+      location.href = url;
+    });
+
+    $("search").addEventListener("input", function (event) {
+      state.query = event.target.value;
+      renderMails();
+    });
+
+    $("senderFilter").addEventListener("change", function (event) {
+      state.sender = event.target.value;
+      renderMails();
+    });
+
+    $("onlyImportant").addEventListener("change", function (event) {
+      state.onlyImportant = event.target.checked;
+      renderMails();
+    });
+
+    $("mailList").addEventListener("click", function (event) {
+      var button = event.target.closest(".mail");
+      if (!button) return;
+      var id = button.getAttribute("data-id");
+      state.openId = state.openId === id ? null : id;
+      renderMails();
+    });
+
+    $("digestHistory").addEventListener("click", function (event) {
+      var button = event.target.closest(".history-item");
+      if (!button) return;
+      var index = parseInt(button.getAttribute("data-index"), 10);
+      state.digestIndex = index;
+      renderDigest(index);
+    });
+  }
+
+  renderHeader();
+  renderStats();
+  renderSenderFilter();
+  renderMails();
+  renderDigest(0);
+  bindEvents();
+})();
+</script>
+</body>
+</html>
